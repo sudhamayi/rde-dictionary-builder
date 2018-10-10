@@ -9,6 +9,7 @@ import argparse
 rde_lib_name = "rde_schema_dictionary_gen"
 
 TestSpecification = namedtuple('TestSpecification', 'csdl_directories '
+                                                    'json_schema_directories '
                                                     'schema_filename '
                                                     'entity '
                                                     'oem_schema_filenames '
@@ -21,6 +22,7 @@ TestSpecification = namedtuple('TestSpecification', 'csdl_directories '
 MAJOR_SCHEMA_DICTIONARY_LIST = [
                                 TestSpecification(
                                     'test/schema/dummysimple/csdl',
+                                    'test/schema/dummysimple/json-schema',
                                     'DummySimple_v1.xml',
                                     'DummySimple.DummySimple',
                                     '',
@@ -33,6 +35,7 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
 
                                 TestSpecification(
                                     'test/schema/metadata test/schema/oem-csdl',
+                                    'test/schema/json-schema',
                                     'Drive_v1.xml',
                                     'Drive.Drive',
                                     'OEM1DriveExt_v1.xml OEM2DriveExt_v1.xml',
@@ -45,6 +48,7 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
 
                                 TestSpecification(
                                     'test/schema/metadata',
+                                    'test/schema/json-schema',
                                     'Storage_v1.xml',
                                     'Storage.Storage',
                                     '',
@@ -57,6 +61,7 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
 
                                 TestSpecification(
                                     'test/schema/metadata',
+                                    'test/schema/json-schema',
                                     'Storage_v1.xml',
                                     'Storage.Storage',
                                     '',
@@ -155,7 +160,7 @@ if __name__ == '__main__':
             schema_dictionary = rde_dictionary_module.generate_schema_dictionary(
                 'local',
                 major_schema.csdl_directories.split(),
-                ['test/schema/json-schema'],
+                major_schema.json_schema_directories.split(),
                 major_schema.entity,
                 major_schema.schema_filename,
                 major_schema.oem_entities.split(),
