@@ -16,7 +16,8 @@ TestSpecification = namedtuple('TestSpecification', 'csdl_directories '
                                                     'profile '
                                                     'dictionary_filename '
                                                     'input_encode_filename '
-                                                    'output_encoded_filename')
+                                                    'output_encoded_filename '
+                                                    'copyright')
 MAJOR_SCHEMA_DICTIONARY_LIST = [
                                 TestSpecification(
                                     'test/schema/dummysimple/csdl',
@@ -27,7 +28,8 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
                                     '',
                                     'DummySimple.bin',
                                     'test/dummysimple.json',
-                                    'DummySimple_bej.bin'),
+                                    'DummySimple_bej.bin',
+                                    'Copyright (c) 2018 Acme Corp'),
 
                                 TestSpecification(
                                     'test/schema/metadata test/schema/oem-csdl',
@@ -38,7 +40,8 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
                                     '',                # profile
                                     'drive.bin',
                                     'test/drive.json',      # file to encode
-                                    'drive_bej.bin'),  # encoded bej file
+                                    'drive_bej.bin',
+                                    'Copyright (c) 2018 Acme Corp'),  # encoded bej file
 
                                 TestSpecification(
                                     'test/schema/metadata',
@@ -49,7 +52,8 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
                                     '',
                                     'storage.bin',
                                     'test/storage.json',
-                                    'storage_bej.bin'),
+                                    'storage_bej.bin',
+                                    'Copyright (c) 2018 Acme Corp'),
 
                                 TestSpecification(
                                     'test/schema/metadata',
@@ -60,7 +64,8 @@ MAJOR_SCHEMA_DICTIONARY_LIST = [
                                     'test/example_profile_for_truncation.json',
                                     'storage.bin',
                                     'test/storage_profile_conformant.json',
-                                    'storage_bej.bin')
+                                    'storage_bej.bin',
+                                    'Copyright (c) 2018 Acme Corp')
                                 ]
 
 if __name__ == '__main__':
@@ -82,6 +87,7 @@ if __name__ == '__main__':
     if not args.test_bej:
         # go thru every csdl and attempt creating a dictionary
         skip_list = ['AttributeRegistry_v1.xml']  # TODO: find and fix why these are failing
+        copyright = 'Copyright (c) 2018 DMTF'
         for filename in os.listdir(schema_test_dir + '/metadata'):
             if filename not in skip_list:
                 # strip out the _v1.xml
@@ -95,13 +101,22 @@ if __name__ == '__main__':
                         [schema_test_dir + '/metadata'],
                         [schema_test_dir + '/json-schema'],
                         entity,
-                        filename
+                        filename,
+                        None,
+                        None,
+                        None,
+                        None,
+                        copyright
                     )
 
                     if schema_dictionary and schema_dictionary.dictionary and schema_dictionary.json_dictionary:
                         print(filename, 'Entries:', len(schema_dictionary.dictionary),
                               'Size:', len(schema_dictionary.dictionary_byte_array),
                               'Url:', json.loads(schema_dictionary.json_dictionary)['schema_url'])
+                        # verify copyright
+                        assert(bytearray(schema_dictionary.dictionary_byte_array[
+                                         len(schema_dictionary.dictionary_byte_array) - len(copyright) - 1:
+                                         len(schema_dictionary.dictionary_byte_array)-1]).decode('utf-8') == copyright)
                     else:
                         print(filename, "Missing entities")
 
