@@ -527,7 +527,7 @@ def is_payload_annotation(property):
 def get_annotation_parts(property):
     """
     Returns the schema property name (if present) and the annotation property name
-	
+
     Returns: schema property name, annotation property name
     """
     m = re.compile('(.*)(@.*\..*)').match(property)
@@ -543,10 +543,10 @@ def get_annotation_name(annotation_property):
 odata_dictionary_entries = {}
 
 
-def get_annotation_dictionary_entries(annotation_dictionary):
+def get_annotation_dictionary_entries(annot_dict):
     # TODO: cache the main annotations
-    base_entry = DictionaryByteArrayStream(annotation_dictionary, 0, -1).get_next_entry()
-    return load_dictionary_subset_by_key_name(annotation_dictionary, base_entry[DICTIONARY_ENTRY_OFFSET],
+    base_entry = DictionaryByteArrayStream(annot_dict, 0, -1).get_next_entry()
+    return load_dictionary_subset_by_key_name(annot_dict, base_entry[DICTIONARY_ENTRY_OFFSET],
                                               base_entry[DICTIONARY_ENTRY_CHILD_COUNT])
 
 
@@ -627,9 +627,9 @@ def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to
             if is_payload_annotation(prop):
                 # two kinds - property annotation (e.g. Status@Message.ExtendedInfo) or payload annotation
                 schema_property, annotation_property = get_annotation_parts(prop)
-                entry = get_annotation_dictionary_entries(annotation_dictionary)[annotation_property]
+                entry = get_annotation_dictionary_entries(annot_dict)[annotation_property]
                 dictionary_selector_bit_value = BEJ_DICTIONARY_SELECTOR_ANNOTATION
-                tmp_dict_to_use = annotation_dictionary
+                tmp_dict_to_use = annot_dict
 
                 if schema_property != '':  # this is a property annotation (e.g. Status@Message.ExtendedInfo)
                     prop_format = BEJ_FORMAT_PROPERTY_ANNOTATION
@@ -671,7 +671,7 @@ def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to
             print('Property cannot be encoded - missing dictionary entry', prop)
 
 
-def bej_encode(output_stream, json_data, schema_dict, annotation_dictionary):
+def bej_encode(output_stream, json_data, schema_dict, annot_dict):
     # Add header info
     output_stream.write(0xF1F0F000.to_bytes(4, 'little'))  # BEJ Version
     output_stream.write(0x0000.to_bytes(2, 'little'))  # BEJ flags
@@ -681,7 +681,7 @@ def bej_encode(output_stream, json_data, schema_dict, annotation_dictionary):
     new_stream = bej_pack_set_start(output_stream, len(json_data))
     dict_stream = DictionaryByteArrayStream(schema_dict)
     entry = dict_stream.get_next_entry()
-    bej_encode_stream(new_stream, json_data, schema_dict, annotation_dictionary, schema_dict, entry[DICTIONARY_ENTRY_OFFSET],
+    bej_encode_stream(new_stream, json_data, schema_dict, annot_dict, schema_dict, entry[DICTIONARY_ENTRY_OFFSET],
                       entry[DICTIONARY_ENTRY_CHILD_COUNT])
     bej_pack_set_done(new_stream, 0)
 
@@ -690,10 +690,10 @@ def get_seq_and_dictionary_selector(seq):
     return seq >> 1, seq & 0x01
 
 
-def get_full_annotation_name_from_sequence_number(seq, annotation_dictionary):
+def get_full_annotation_name_from_sequence_number(seq, annot_dict):
     # TODO: cache the main annotations
-    base_entry = DictionaryByteArrayStream(annotation_dictionary, 0, -1).get_next_entry()
-    annotation_entries = load_dictionary_subset_by_key_sequence(annotation_dictionary,
+    base_entry = DictionaryByteArrayStream(annot_dict, 0, -1).get_next_entry()
+    annotation_entries = load_dictionary_subset_by_key_sequence(annot_dict,
                                                                 base_entry[DICTIONARY_ENTRY_OFFSET],
                                                                 base_entry[DICTIONARY_ENTRY_CHILD_COUNT])
 
@@ -714,9 +714,9 @@ def bej_decode_enum_value(dict_to_use, dict_entry, value):
     return enum_value
 
 
-def bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream):
+def bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream):
     if selector == BEJ_DICTIONARY_SELECTOR_ANNOTATION:
-        name = get_full_annotation_name_from_sequence_number(seq, annotation_dict)
+        name = get_full_annotation_name_from_sequence_number(seq, annot_dict)
     else:
         name = entries_by_seq[seq][DICTIONARY_ENTRY_NAME]
 
@@ -724,9 +724,9 @@ def bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_strea
         output_stream.write('"' + name + '":')
 
 
-def bej_decode_property_annotation_name(annotation_dict, annot_seq, prop_seq, entries_by_seq, output_stream):
+def bej_decode_property_annotation_name(annot_dict, annot_seq, prop_seq, entries_by_seq, output_stream):
     prop_name = entries_by_seq[prop_seq][DICTIONARY_ENTRY_NAME]
-    annot_name = get_full_annotation_name_from_sequence_number(annot_seq, annotation_dict)
+    annot_name = get_full_annotation_name_from_sequence_number(annot_seq, annot_dict)
 
     output_stream.write('"' + prop_name + annot_name + '":')
 
@@ -737,7 +737,7 @@ def get_annotation_dictionary_entries_by_seq(annotation_dictionary):
                                               base_entry[DICTIONARY_ENTRY_CHILD_COUNT])
 
 
-def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, is_seq_array_index, add_name=True):
+def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entries_by_seq, prop_count, is_seq_array_index, add_name=True):
     index = 0
     while input_stream.tell() < get_stream_size(input_stream) and index < prop_count:
         format = bej_typeof(input_stream)
@@ -749,12 +749,12 @@ def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, 
             entry = entries_by_seq[seq]
 
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
-            dict_to_use = schema_dict if selector is BEJ_DICTIONARY_SELECTOR_MAJOR_SCHEMA else annotation_dict
+            dict_to_use = schema_dict if selector is BEJ_DICTIONARY_SELECTOR_MAJOR_SCHEMA else annot_dict
             output_stream.write('{')
 
-            bej_decode_stream(schema_dict, annotation_dict,
+            bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
                               load_dictionary_subset_by_key_sequence(
                                   dict_to_use, entry[DICTIONARY_ENTRY_OFFSET], entry[DICTIONARY_ENTRY_CHILD_COUNT]),
                               prop_count=count, is_seq_array_index=False)
@@ -763,28 +763,28 @@ def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, 
         elif format == BEJ_FORMAT_STRING:
             [seq, selector], value = bej_unpack_sflv_string(input_stream)
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
             output_stream.write('"' + value + '"')
 
         elif format == BEJ_FORMAT_INTEGER:
             [seq, selector], value = bej_unpack_sflv_integer(input_stream)
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
             output_stream.write(str(value))
 
         elif format == BEJ_FORMAT_BOOLEAN:
             [seq, selector], value = bej_unpack_sflv_boolean(input_stream)
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
             output_stream.write(value)
 
         elif format == BEJ_FORMAT_RESOURCE_LINK:
             [seq, selector], pdr = bej_unpack_sflv_resource_link(input_stream)
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
             output_stream.write('"' + get_link_from_pdr_map(pdr) + '"')
 
@@ -794,7 +794,7 @@ def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, 
                 seq = 0
 
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
             enum_value = bej_decode_enum_value(schema_dict, entries_by_seq[seq], value)
             output_stream.write('"' + enum_value + '"')
@@ -807,12 +807,12 @@ def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, 
             entry = entries_by_seq[seq]
 
             if add_name:
-                bej_decode_name(annotation_dict, seq, selector, entries_by_seq, output_stream)
+                bej_decode_name(annot_dict, seq, selector, entries_by_seq, output_stream)
 
-            dict_to_use = schema_dict if selector is BEJ_DICTIONARY_SELECTOR_MAJOR_SCHEMA else annotation_dict
+            dict_to_use = schema_dict if selector is BEJ_DICTIONARY_SELECTOR_MAJOR_SCHEMA else annot_dict
             output_stream.write('[')
             for i in range(0, array_member_count):
-                bej_decode_stream(schema_dict, annotation_dict,
+                bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
                                   load_dictionary_subset_by_key_sequence(dict_to_use, entry[DICTIONARY_ENTRY_OFFSET],
                                                                          entry[DICTIONARY_ENTRY_CHILD_COUNT]),
                                   prop_count=1, is_seq_array_index=True, add_name=False)
@@ -832,11 +832,11 @@ def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, 
             # e.g Status@Message.ExtendedInfo
 
             annot_seq, prop_seq = bej_unpack_property_annotation_start(input_stream)
-            bej_decode_property_annotation_name(annotation_dictionary, annot_seq, prop_seq, entries_by_seq,
+            bej_decode_property_annotation_name(annot_dict, annot_seq, prop_seq, entries_by_seq,
                                                 output_stream)
 
-            bej_decode_stream(schema_dict, annotation_dict,
-                              get_annotation_dictionary_entries_by_seq(annotation_dict),
+            bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
+                              get_annotation_dictionary_entries_by_seq(annot_dict),
                               prop_count=1, is_seq_array_index=False, add_name=False)
         else:
             print('Unable to decode')
@@ -849,7 +849,7 @@ def bej_decode_stream(schema_dict, annotation_dict, entries_by_seq, prop_count, 
     return
 
 
-def bej_decode(schema_dictionary, annotation_dictionary):
+def bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary):
     # strip off the headers
     version = input_stream.read(4)
     assert(version == bytes([0x00, 0xF0, 0xF0, 0xF1]))
@@ -858,7 +858,7 @@ def bej_decode(schema_dictionary, annotation_dictionary):
     schemaClass = input_stream.read(1)
     assert(schemaClass == bytes([0x00]))
 
-    bej_decode_stream(schema_dictionary, annotation_dictionary,
+    bej_decode_stream(output_stream, input_stream, schema_dictionary, annotation_dictionary,
                       load_dictionary_subset_by_key_sequence(schema_dictionary, 0, -1),
                       1, is_seq_array_index=False, add_name=False)
 
@@ -925,6 +925,6 @@ if __name__ == '__main__':
 
         input_stream = io.BytesIO(bytes(bej_encoded_bytes))
         output_stream = io.StringIO()
-        bej_decode(schema_dictionary, annotation_dictionary)
+        bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary)
         print(json.dumps(json.loads(output_stream.getvalue()), indent=3))
 
