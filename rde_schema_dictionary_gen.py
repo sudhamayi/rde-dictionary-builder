@@ -1133,11 +1133,10 @@ def dictionary_binary_size(dictionary, copyright):
                                    + 1  # for null termination
     copyright_len = 0
     if copyright:
-        copyright_len = len(copyright)
+        copyright_len = len(copyright) + 1  # for null termination
 
     return dictionary_binary_header_size() + len(dictionary) * dictionary_binary_entry_size() + \
            total_field_string_size + 2 + copyright_len
-
 
 
 def binary_offset_from_dictionary_offset(offset):
@@ -1196,9 +1195,9 @@ def generate_byte_array(dictionary, version, is_truncated, copyright):
 
     # DictionaryFlags
     if is_truncated:
-        binary_data.append(0x00)
-    else:
         binary_data.append(0x01)
+    else:
+        binary_data.append(0x00)
 
     binary_data.extend(len(dictionary).to_bytes(2, 'little', signed=False))  # EntryCount
     binary_data.extend(version.to_bytes(4, 'little', signed=False))  # SchemaVersion
