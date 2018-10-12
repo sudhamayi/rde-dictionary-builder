@@ -190,22 +190,24 @@ if __name__ == '__main__':
         bej_stream = io.BytesIO()
 
         json_to_encode = json.load(open(major_schema.input_encode_filename))
-        bej_module.bej_encode(
-            bej_stream,
-            json_to_encode,
-            schema_dictionary.dictionary_byte_array,
-            annotation_dictionary.dictionary_byte_array
-        )
+        encode_success = bej_module.bej_encode(
+                                        bej_stream,
+                                        json_to_encode,
+                                        schema_dictionary.dictionary_byte_array,
+                                        annotation_dictionary.dictionary_byte_array
+                                    )
+        assert encode_success,'Encode failure'
         encoded_bytes = bej_stream.getvalue()
         bej_module.print_hex(encoded_bytes)
 
         decode_stream = io.StringIO()
-        bej_module.bej_decode(
-            decode_stream,
-            io.BytesIO(bytes(encoded_bytes)),
-            schema_dictionary.dictionary_byte_array,
-            annotation_dictionary.dictionary_byte_array
-        )
+        decode_success = bej_module.bej_decode(
+                                        decode_stream,
+                                        io.BytesIO(bytes(encoded_bytes)),
+                                        schema_dictionary.dictionary_byte_array,
+                                        annotation_dictionary.dictionary_byte_array
+                                    )
+        assert decode_success,'Decode failure'
 
         decode_file = decode_stream.getvalue()
 

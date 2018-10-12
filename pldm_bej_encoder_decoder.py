@@ -611,7 +611,8 @@ def bej_encode_sflv(output_stream, schema_dict, annot_dict, dict_to_use, dict_en
 
     else:
         if verbose:
-            print('Skipped encoding value:', json_value)
+            print('Failed to encode value:', json_value)
+        return False
 
 
 def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to_use, offset=0, child_count=-1):
@@ -671,6 +672,9 @@ def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to
         else:
             if verbose:
                 print('Property cannot be encoded - missing dictionary entry', prop)
+            return False
+
+    return True
 
 
 def bej_encode(output_stream, json_data, schema_dict, annot_dict):
@@ -683,9 +687,11 @@ def bej_encode(output_stream, json_data, schema_dict, annot_dict):
     new_stream = bej_pack_set_start(output_stream, len(json_data))
     dict_stream = DictionaryByteArrayStream(schema_dict)
     entry = dict_stream.get_next_entry()
-    bej_encode_stream(new_stream, json_data, schema_dict, annot_dict, schema_dict, entry[DICTIONARY_ENTRY_OFFSET],
-                      entry[DICTIONARY_ENTRY_CHILD_COUNT])
-    bej_pack_set_done(new_stream, 0)
+    success = bej_encode_stream(new_stream, json_data, schema_dict, annot_dict, schema_dict, entry[DICTIONARY_ENTRY_OFFSET],
+                                entry[DICTIONARY_ENTRY_CHILD_COUNT])
+    if success:
+        bej_pack_set_done(new_stream, 0)
+    return success
 
 
 def get_seq_and_dictionary_selector(seq):
@@ -843,13 +849,13 @@ def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entr
         else:
             if verbose:
                 print('Unable to decode')
-            exit()
+            return False
 
         if index < prop_count-1:
             output_stream.write(',')
         index += 1
 
-    return
+    return True
 
 
 def bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary):
@@ -861,9 +867,10 @@ def bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictio
     schemaClass = input_stream.read(1)
     assert(schemaClass == bytes([0x00]))
 
-    bej_decode_stream(output_stream, input_stream, schema_dictionary, annotation_dictionary,
-                      load_dictionary_subset_by_key_sequence(schema_dictionary, 0, -1),
-                      1, is_seq_array_index=False, add_name=False)
+    success = bej_decode_stream(output_stream, input_stream, schema_dictionary, annotation_dictionary,
+                                load_dictionary_subset_by_key_sequence(schema_dictionary, 0, -1),
+                                1, is_seq_array_index=False, add_name=False)
+    return success
 
 
 if __name__ == '__main__':
@@ -914,19 +921,23 @@ if __name__ == '__main__':
 
         # create a byte stream
         output_stream = io.BytesIO()
-        bej_encode(output_stream, json_to_encode, schema_dictionary, annotation_dictionary)
-        encoded_bytes = output_stream.getvalue()
-        if not silent:
-            print_hex(encoded_bytes)
-            print('JSON size:', total_json_size)
-            print('Total encode size:', len(encoded_bytes))
-            print('Compression ratio(%):', (1.0 - len(encoded_bytes)/total_json_size)*100)
+        success = bej_encode(output_stream, json_to_encode, schema_dictionary, annotation_dictionary)
+        if success:
+            encoded_bytes = output_stream.getvalue()
+            if not silent:
+                print_hex(encoded_bytes)
+                print('JSON size:', total_json_size)
+                print('Total encode size:', len(encoded_bytes))
+                print('Compression ratio(%):', (1.0 - len(encoded_bytes)/total_json_size)*100)
 
-        if args.bejOutputFile:
-            args.bejOutputFile.write(encoded_bytes)
+            if args.bejOutputFile:
+                args.bejOutputFile.write(encoded_bytes)
 
-        if args.pdrMapFile:
-            args.pdrMapFile.write(json.dumps(resource_link_to_pdr_map))
+            if args.pdrMapFile:
+                args.pdrMapFile.write(json.dumps(resource_link_to_pdr_map))
+        else:
+            if not silent:
+                print('Failed to encode JSON')
 
     elif args.operation == 'decode':
         # Read the encoded bytes
@@ -937,7 +948,11 @@ if __name__ == '__main__':
 
         input_stream = io.BytesIO(bytes(bej_encoded_bytes))
         output_stream = io.StringIO()
-        bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary)
-        if not silent:
-            print(json.dumps(json.loads(output_stream.getvalue()), indent=3))
+        success = bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary)
+        if success:
+            if not silent:
+                print(json.dumps(json.loads(output_stream.getvalue()), indent=3))
+        else:
+            if not silent:
+                print('Failed to decode JSON')
 
