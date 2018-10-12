@@ -610,7 +610,8 @@ def bej_encode_sflv(output_stream, schema_dict, annot_dict, dict_to_use, dict_en
         bej_pack_array_done(nested_stream, seq)
 
     else:
-        print('Skipped encoding value:', json_value)
+        if verbose:
+            print('Skipped encoding value:', json_value)
 
 
 def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to_use, offset=0, child_count=-1):
@@ -668,7 +669,8 @@ def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to
                 bej_encode_sflv(output_stream, schema_dict, annot_dict, tmp_dict_to_use, entry,
                                 sequence_number_with_dictionary_selector, prop_format, json_data[prop])
         else:
-            print('Property cannot be encoded - missing dictionary entry', prop)
+            if verbose:
+                print('Property cannot be encoded - missing dictionary entry', prop)
 
 
 def bej_encode(output_stream, json_data, schema_dict, annot_dict):
@@ -839,7 +841,8 @@ def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entr
                               get_annotation_dictionary_entries_by_seq(annot_dict),
                               prop_count=1, is_seq_array_index=False, add_name=False)
         else:
-            print('Unable to decode')
+            if verbose:
+                print('Unable to decode')
             exit()
 
         if index < prop_count-1:
@@ -866,6 +869,7 @@ def bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictio
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", help="increase output verbosity", action="store_true")
+    parser.add_argument("--silent", help="no output prints unless errors", action="store_true")
     subparsers = parser.add_subparsers(dest='operation')
 
     encode_parser = subparsers.add_parser('encode')
@@ -882,6 +886,13 @@ if __name__ == '__main__':
     decode_parser.add_argument('-p', '--pdrMapFile', type=argparse.FileType('r'), required=False)
 
     args = parser.parse_args()
+
+    # Set the verbose flag.
+    verbose = args.verbose
+    silent = args.silent
+    if verbose and silent:  # override silent if verbose is set
+        verbose = True
+        silent = False
 
     # Read the binary schema dictionary into a byte array
     schema_dictionary = list(args.schemaDictionary.read())
@@ -905,10 +916,11 @@ if __name__ == '__main__':
         output_stream = io.BytesIO()
         bej_encode(output_stream, json_to_encode, schema_dictionary, annotation_dictionary)
         encoded_bytes = output_stream.getvalue()
-        print_hex(encoded_bytes)
-        print('JSON size:', total_json_size)
-        print('Total encode size:', len(encoded_bytes))
-        print('Compression ratio(%):', (1.0 - len(encoded_bytes)/total_json_size)*100)
+        if not silent:
+            print_hex(encoded_bytes)
+            print('JSON size:', total_json_size)
+            print('Total encode size:', len(encoded_bytes))
+            print('Compression ratio(%):', (1.0 - len(encoded_bytes)/total_json_size)*100)
 
         if args.bejOutputFile:
             args.bejOutputFile.write(encoded_bytes)
@@ -926,5 +938,6 @@ if __name__ == '__main__':
         input_stream = io.BytesIO(bytes(bej_encoded_bytes))
         output_stream = io.StringIO()
         bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary)
-        print(json.dumps(json.loads(output_stream.getvalue()), indent=3))
+        if not silent:
+            print(json.dumps(json.loads(output_stream.getvalue()), indent=3))
 
