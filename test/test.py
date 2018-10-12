@@ -197,6 +197,7 @@ if __name__ == '__main__':
             annotation_dictionary.dictionary_byte_array
         )
         encoded_bytes = bej_stream.getvalue()
+        bej_module.print_hex(encoded_bytes)
 
         decode_stream = io.StringIO()
         bej_module.bej_decode(
