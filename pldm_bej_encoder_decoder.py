@@ -566,6 +566,7 @@ def bej_encode_enum(output_stream, dict_to_use, dict_entry, sequence_number_with
 
 
 def bej_encode_sflv(output_stream, schema_dict, annot_dict, dict_to_use, dict_entry, seq, format, json_value):
+    success = True
     if format == BEJ_FORMAT_STRING:
         bej_pack_sflv_string(output_stream, seq, json_value)
 
@@ -589,9 +590,9 @@ def bej_encode_sflv(output_stream, schema_dict, annot_dict, dict_to_use, dict_en
 
     elif format == BEJ_FORMAT_SET:
         nested_set_stream = bej_pack_set_start(output_stream, len(json_value))
-        bej_encode_stream(nested_set_stream, json_value, schema_dict,
-                          annot_dict, dict_to_use, dict_entry[DICTIONARY_ENTRY_OFFSET],
-                          dict_entry[DICTIONARY_ENTRY_CHILD_COUNT])
+        success = bej_encode_stream(nested_set_stream, json_value, schema_dict,
+                                    annot_dict, dict_to_use, dict_entry[DICTIONARY_ENTRY_OFFSET],
+                                    dict_entry[DICTIONARY_ENTRY_CHILD_COUNT])
         bej_pack_set_done(nested_set_stream, seq)
 
     elif format == BEJ_FORMAT_ARRAY:
@@ -603,21 +604,26 @@ def bej_encode_sflv(output_stream, schema_dict, annot_dict, dict_to_use, dict_en
         nested_stream = bej_pack_array_start(output_stream, count)
         tmp_seq, selector = bej_decode_sequence_number(seq)
         for i in range(0, count):
-            bej_encode_sflv(nested_stream, schema_dict, annot_dict, dict_to_use, array_dict_entry,
-                            (i << 1) | selector, array_dict_entry[DICTIONARY_ENTRY_FORMAT],
-                            json_value[i])
+            success = bej_encode_sflv(nested_stream, schema_dict, annot_dict, dict_to_use, array_dict_entry,
+                                      (i << 1) | selector, array_dict_entry[DICTIONARY_ENTRY_FORMAT],
+                                      json_value[i])
+            if not success:
+                break
 
         bej_pack_array_done(nested_stream, seq)
 
     else:
         if verbose:
             print('Failed to encode value:', json_value)
-        return False
+        success = False
+
+    return success
 
 
 def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to_use, offset=0, child_count=-1):
     global current_available_pdr
     dict_entries = load_dictionary_subset_by_key_name(dict_to_use, offset, child_count)
+    success = True
 
     for prop in json_data:
         if prop in dict_entries or is_payload_annotation(prop):
@@ -661,20 +667,23 @@ def bej_encode_stream(output_stream, json_data, schema_dict, annot_dict, dict_to
 
                 nested_stream = bej_pack_property_annotation_start(output_stream)
 
-                bej_encode_sflv(nested_stream, schema_dict, annot_dict, tmp_dict_to_use, entry,
-                                sequence_number_with_dictionary_selector, entry[DICTIONARY_ENTRY_FORMAT],
-                                json_data[prop])
+                success = bej_encode_sflv(nested_stream, schema_dict, annot_dict, tmp_dict_to_use, entry,
+                                          sequence_number_with_dictionary_selector, entry[DICTIONARY_ENTRY_FORMAT],
+                                          json_data[prop])
 
                 bej_pack_property_annotation_done(nested_stream, prop_seq)
             else:
-                bej_encode_sflv(output_stream, schema_dict, annot_dict, tmp_dict_to_use, entry,
-                                sequence_number_with_dictionary_selector, prop_format, json_data[prop])
+                success = bej_encode_sflv(output_stream, schema_dict, annot_dict, tmp_dict_to_use, entry,
+                                          sequence_number_with_dictionary_selector, prop_format, json_data[prop])
         else:
             if verbose:
                 print('Property cannot be encoded - missing dictionary entry', prop)
-            return False
+            success = False
 
-    return True
+        if not success:
+            break
+
+    return success
 
 
 def bej_encode(output_stream, json_data, schema_dict, annot_dict):
@@ -747,7 +756,8 @@ def get_annotation_dictionary_entries_by_seq(annotation_dictionary):
 
 def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entries_by_seq, prop_count, is_seq_array_index, add_name=True):
     index = 0
-    while input_stream.tell() < get_stream_size(input_stream) and index < prop_count:
+    success = True
+    while success and input_stream.tell() < get_stream_size(input_stream) and index < prop_count:
         format = bej_typeof(input_stream)
 
         if format == BEJ_FORMAT_SET:
@@ -762,10 +772,10 @@ def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entr
             dict_to_use = schema_dict if selector is BEJ_DICTIONARY_SELECTOR_MAJOR_SCHEMA else annot_dict
             output_stream.write('{')
 
-            bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
-                              load_dictionary_subset_by_key_sequence(
-                                  dict_to_use, entry[DICTIONARY_ENTRY_OFFSET], entry[DICTIONARY_ENTRY_CHILD_COUNT]),
-                              prop_count=count, is_seq_array_index=False)
+            success = bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
+                                        load_dictionary_subset_by_key_sequence(
+                                            dict_to_use, entry[DICTIONARY_ENTRY_OFFSET], entry[DICTIONARY_ENTRY_CHILD_COUNT]),
+                                        prop_count=count, is_seq_array_index=False)
             output_stream.write('}')
 
         elif format == BEJ_FORMAT_STRING:
@@ -820,10 +830,10 @@ def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entr
             dict_to_use = schema_dict if selector is BEJ_DICTIONARY_SELECTOR_MAJOR_SCHEMA else annot_dict
             output_stream.write('[')
             for i in range(0, array_member_count):
-                bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
-                                  load_dictionary_subset_by_key_sequence(dict_to_use, entry[DICTIONARY_ENTRY_OFFSET],
-                                                                         entry[DICTIONARY_ENTRY_CHILD_COUNT]),
-                                  prop_count=1, is_seq_array_index=True, add_name=False)
+                success = bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
+                                            load_dictionary_subset_by_key_sequence(dict_to_use, entry[DICTIONARY_ENTRY_OFFSET],
+                                                                                   entry[DICTIONARY_ENTRY_CHILD_COUNT]),
+                                            prop_count=1, is_seq_array_index=True, add_name=False)
                 if i < array_member_count-1:
                     output_stream.write(',')
 
@@ -843,19 +853,19 @@ def bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict, entr
             bej_decode_property_annotation_name(annot_dict, annot_seq, prop_seq, entries_by_seq,
                                                 output_stream)
 
-            bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
-                              get_annotation_dictionary_entries_by_seq(annot_dict),
-                              prop_count=1, is_seq_array_index=False, add_name=False)
+            success = bej_decode_stream(output_stream, input_stream, schema_dict, annot_dict,
+                                        get_annotation_dictionary_entries_by_seq(annot_dict),
+                                        prop_count=1, is_seq_array_index=False, add_name=False)
         else:
             if verbose:
                 print('Unable to decode')
-            return False
+            success = False
 
         if index < prop_count-1:
             output_stream.write(',')
         index += 1
 
-    return True
+    return success
 
 
 def bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictionary):
@@ -867,10 +877,9 @@ def bej_decode(output_stream, input_stream, schema_dictionary, annotation_dictio
     schemaClass = input_stream.read(1)
     assert(schemaClass == bytes([0x00]))
 
-    success = bej_decode_stream(output_stream, input_stream, schema_dictionary, annotation_dictionary,
-                                load_dictionary_subset_by_key_sequence(schema_dictionary, 0, -1),
-                                1, is_seq_array_index=False, add_name=False)
-    return success
+    return bej_decode_stream(output_stream, input_stream, schema_dictionary, annotation_dictionary,
+                             load_dictionary_subset_by_key_sequence(schema_dictionary, 0, -1),
+                             1, is_seq_array_index=False, add_name=False)
 
 
 if __name__ == '__main__':
