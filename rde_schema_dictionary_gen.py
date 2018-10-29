@@ -262,6 +262,13 @@ def add_annotation_terms(doc, entity_repo):
 
 
 def add_entity_and_complex_types(doc, entity_repo):
+    """
+    Adds all entity and complex types into the entity repo for the specified document
+
+    Args:
+        doc:  The document to search for enums
+        entity_repo: Found enums will be added to the entity_repo
+    """
     for entity_type in doc.xpath('//edm:EntityType | //edm:ComplexType', namespaces=ODATA_ALL_NAMESPACES):
         properties = []
         if is_abstract(entity_type) is not True:
@@ -285,6 +292,13 @@ def add_entity_and_complex_types(doc, entity_repo):
 
 
 def add_enums(doc, entity_repo):
+    """
+    Adds all enum types into the entity repo for the specified document
+
+    Args:
+        doc:  The document to search for enums
+        entity_repo: Found enums will be added to the entity_repo
+    """
     for enum_type in doc.xpath('//edm:EnumType', namespaces=ODATA_ALL_NAMESPACES):
         enum_type_name = get_qualified_entity_name(enum_type)
         if enum_type_name not in entity_repo:
@@ -309,11 +323,12 @@ def add_enums(doc, entity_repo):
                 enum_dict[ver] = []
             enum_dict[ver].append(enum_member.get('Name'))
 
-        # sort the keys
+        # sort the keys (the keys are the version strings).
         sorted_enum_dict = collections.OrderedDict(sorted(enum_dict.items()))
 
         # Add the sorted enum values to the entity repo
         for e in sorted_enum_dict:
+            # alphabetically sort all the values as case insensitive
             sorted_enum_dict[e] = sorted(sorted_enum_dict[e], key=lambda s: s.casefold())
             for item in sorted_enum_dict[e]:
                 entity_repo[enum_type_name][ENTITY_REPO_TUPLE_PROPERTY_LIST_INDEX].append([item])
